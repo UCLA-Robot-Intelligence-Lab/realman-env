@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>dual_rm_gazebo</name>
+  <version>0.0.0</version>
+  <description>TODO: Package description</description>
+  <maintainer email="haleyli@realman-robot.com">haley</maintainer>
+  <license>TODO: License declaration</license>
+
+  <!-- Build dependencies -->
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <build_depend>rclcpp</build_depend>
+  <!-- <build_depend>gazebo</build_depend> -->
+  <build_depend>gazebo_dev</build_depend>
+  <build_depend>gazebo_ros_pkgs</build_depend>
+  <build_depend>control_toolbox</build_depend>
+  <build_depend>Boost</build_depend>
+
+  <!-- Execution dependencies -->
+  <exec_depend>rclcpp</exec_depend>
+  <!-- <exec_depend>gazebo</exec_depend> -->
+  <exec_depend>gazebo_dev</exec_depend>
+  <exec_depend>gazebo_ros_pkgs</exec_depend>
+  <exec_depend>control_toolbox</exec_depend>
+  <exec_depend>Boost</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+    <gazebo_ros plugin_path="${prefix}/lib" gazebo_media_path="${prefix}"/>
+  </export>
+</package>
