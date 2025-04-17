@@ -9,9 +9,10 @@ import sys
 import tty
 import termios
 import select
+import time
 
 class KeyboardController(Node):
-    """Control the Woosh Robot using keyboard inputs."""
+    """Control the Woosh Robot using keyboard inputs with continuous movement."""
    
     # Action values
     ACTION_CANCEL = 0
@@ -46,6 +47,19 @@ class KeyboardController(Node):
         self.is_moving = False
         self.movement_complete = threading.Event()
         self.movement_complete.set()  # Initially not moving
+        
+        # Track key states (pressed or released)
+        self.key_states = {
+            'w': False,  # Forward
+            's': False,  # Backward
+            'a': False,  # Rotate left
+            'd': False,  # Rotate right
+            'q': False,  # Strafe left
+            'e': False,  # Strafe right
+        }
+        
+        # Flag to indicate if continuous movement thread should run
+        self.running = True
        
         # Wait for the action server to be available
         self.get_logger().info("Waiting for robot action server...")
@@ -57,22 +71,51 @@ class KeyboardController(Node):
            
         self.get_logger().info("Robot action server ready!")
         self.print_controls()
+        
+        # Start the continuous movement thread
+        self.movement_thread = threading.Thread(target=self.continuous_movement_loop)
+        self.movement_thread.daemon = True
+        self.movement_thread.start()
    
     def print_controls(self):
         """Print the keyboard control instructions."""
         print("\n=== WOOSH ROBOT KEYBOARD CONTROLLER ===")
         print("Control the robot using the following keys:")
-        print("  W - Move forward")
-        print("  S - Move backward")
-        print("  A - Rotate counterclockwise")
-        print("  D - Rotate clockwise")
-        print("  Q - Strafe left")
-        print("  E - Strafe right")
+        print("  W - Hold to move forward")
+        print("  S - Hold to move backward")
+        print("  A - Hold to rotate counterclockwise")
+        print("  D - Hold to rotate clockwise")
+        print("  Q - Hold to strafe left")
+        print("  E - Hold to strafe right")
         print("  + - Increase speed")
         print("  - - Decrease speed")
         print("  X - Stop/Cancel movement")
         print("  ESC/Ctrl+C - Quit")
         print("=====================================\n")
+    
+    def continuous_movement_loop(self):
+        """Thread function that continuously sends movement commands based on key states."""
+        while self.running:
+            # Check which keys are pressed and send appropriate commands
+            if any(self.key_states.values()):
+                if self.key_states['w']:
+                    self.move_forward()
+                elif self.key_states['s']:
+                    self.move_backward()
+                elif self.key_states['a']:
+                    self.rotate_left()
+                elif self.key_states['d']:
+                    self.rotate_right()
+                elif self.key_states['q']:
+                    self.strafe_left()
+                elif self.key_states['e']:
+                    self.strafe_right()
+                
+                # Wait for the movement to complete
+                self.movement_complete.wait(timeout=0.05)
+            
+            # Small sleep to avoid CPU hogging
+            time.sleep(0.05)
    
     def send_movement_command(self, mode, speed, value, angle=0.0, action=1):
         """Send a movement command to the robot."""
@@ -84,7 +127,7 @@ class KeyboardController(Node):
             # Cancel the current movement first
             self.cancel_movement()
             # Wait for the cancellation to complete
-            self.movement_complete.wait(timeout=1.0)
+            self.movement_complete.wait(timeout=0.2)
        
         # Mark that we're starting a movement
         self.is_moving = True
@@ -119,8 +162,8 @@ class KeyboardController(Node):
     def feedback_callback(self, feedback_msg):
         """Process feedback from the robot during movement."""
         feedback = feedback_msg.feedback.fb
-        self.get_logger().info(
-            f"Movement status update - State: {feedback.state.value}, "
+        self.get_logger().debug(
+            f"Movement status - State: {feedback.state.value}, "
             f"Code: {feedback.code}, Message: {feedback.msg}"
         )
        
@@ -140,7 +183,7 @@ class KeyboardController(Node):
             self.movement_complete.set()
             return
        
-        self.get_logger().info("Goal accepted!")
+        self.get_logger().debug("Goal accepted!")
         result_future = goal_handle.get_result_async()
         result_future.add_done_callback(self.result_callback)
    
@@ -150,9 +193,9 @@ class KeyboardController(Node):
         status = result.ret.state.value
        
         if status == State.K_ROS_SUCCESS:
-            self.get_logger().info("Movement completed successfully")
+            self.get_logger().debug("Movement completed successfully")
         elif status == State.K_ROS_CANCEL:
-            self.get_logger().info("Movement was cancelled")
+            self.get_logger().debug("Movement was cancelled")
         elif status == State.K_ROS_FAILURE:
             self.get_logger().error("Movement failed")
         else:
@@ -224,13 +267,25 @@ class KeyboardController(Node):
    
     def cancel_movement(self):
         """Cancel the current movement."""
-        return self.send_movement_command(
-            self.MODE_STRAIGHT, 0.0, 0.0, action=self.ACTION_CANCEL
-        )
+        # Only send cancel command if we're actually moving
+        if self.is_moving:
+            return self.send_movement_command(
+                self.MODE_STRAIGHT, 0.0, 0.0, action=self.ACTION_CANCEL
+            )
+        return None
+    
+    def stop(self):
+        """Stop the continuous movement thread and clean up."""
+        self.running = False
+        # Wait for the thread to finish
+        if self.movement_thread.is_alive():
+            self.movement_thread.join(timeout=1.0)
+        # Cancel any ongoing movement
+        self.cancel_movement()
 
 
-def get_key(timeout=0.1):
-    """Get a single keypress from the terminal."""
+def get_key_nonblocking(timeout=0.1):
+    """Get a single keypress from the terminal without blocking."""
     fd = sys.stdin.fileno()
     old_settings = termios.tcgetattr(fd)
     try:
@@ -265,36 +320,52 @@ def main(args=None):
    
     try:
         while True:
-            key = get_key()
-           
+            key = get_key_nonblocking(timeout=0.05)
+            
             # Check for quit keys
             if key == '\x03' or key == '\x1b':  # Ctrl+C or ESC
                 break
                
-            # Process the key
-            if key == 'w':
-                controller.move_forward()
-            elif key == 's':
-                controller.move_backward()
-            elif key == 'a':
-                controller.rotate_left()
-            elif key == 'd':
-                controller.rotate_right()
-            elif key == 'q':
-                controller.strafe_left()
-            elif key == 'e':
-                controller.strafe_right()
-            elif key == '+':
-                controller.increase_speed()
-            elif key == '-':
-                controller.decrease_speed()
-            elif key == 'x':
-                controller.cancel_movement()
+            # Process the key press
+            if key:
+                # Handle press events
+                if key in controller.key_states:
+                    # Set the key state to pressed
+                    # First cancel any other movement keys
+                    for k in controller.key_states:
+                        controller.key_states[k] = False
+                    # Then set this key to pressed
+                    controller.key_states[key] = True
+                elif key == '+':
+                    controller.increase_speed()
+                elif key == '-':
+                    controller.decrease_speed()
+                elif key == 'x':
+                    # Cancel all movements
+                    controller.cancel_movement()
+                    # Reset all key states
+                    for k in controller.key_states:
+                        controller.key_states[k] = False
+            else:
+                # If no key was pressed, check if we should release keys
+                if any(controller.key_states.values()):
+                    # Detect key release by checking if the key is still pressed
+                    # This is a bit tricky in a terminal, but we'll assume if no 
+                    # key is detected, all keys are released
+                    for k in controller.key_states:
+                        if controller.key_states[k]:
+                            controller.key_states[k] = False
+                            # Cancel the movement when key is released
+                            controller.cancel_movement()
+                            break
+            
+            # Small sleep to avoid CPU hogging
+            time.sleep(0.05)
     except Exception as e:
         print(f"Error: {e}")
     finally:
         # Clean up
-        controller.cancel_movement()
+        controller.stop()
         controller.destroy_node()
         rclpy.shutdown()
         print("\nKeyboard controller terminated")
