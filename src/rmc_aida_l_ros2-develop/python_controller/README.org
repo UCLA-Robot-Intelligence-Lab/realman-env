@@ -14,6 +14,8 @@ cd ~/ros2_ws/
 colcon build --packages-select python_controller
 source install/setup.bash
 
+Remember to source the setup.bash in any new terminal you make!
+
 To build the package python_controller with the given nodes inside:
 - keyboard_base_controller (control base movement with keyboard input)
 - base_controller (example script to just go fowards some small distance)
