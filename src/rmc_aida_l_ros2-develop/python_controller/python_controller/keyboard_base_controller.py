@@ -45,6 +45,7 @@ class KeyboardController(Node):
        
         # Track if we're currently processing a movement
         self.is_moving = False
+        self.is_cancelling = False  # Add flag to prevent recursion
         self.movement_complete = threading.Event()
         self.movement_complete.set()  # Initially not moving
         
@@ -122,11 +123,32 @@ class KeyboardController(Node):
         if not self.action_server_ready:
             self.get_logger().error("Action server not available!")
             return
-           
-        if self.is_moving:
-            # Cancel the current movement first
-            self.cancel_movement()
-            # Wait for the cancellation to complete
+        
+        # FIXED: Avoid recursive calls between send_movement_command and cancel_movement
+        if self.is_moving and action != self.ACTION_CANCEL and not self.is_cancelling:
+            # Set the cancellation flag to prevent recursion
+            self.is_cancelling = True
+            
+            # Send a direct cancel command instead of calling cancel_movement()
+            cancel_goal_msg = StepControl.Goal()
+            cancel_step = StepControlStep()
+            cancel_goal_msg.arg.action.value = self.ACTION_CANCEL
+            cancel_step.mode.value = self.MODE_STRAIGHT
+            cancel_step.speed = 0.0
+            cancel_step.value = 0.0
+            cancel_step.angle = 0.0
+            cancel_goal_msg.arg.steps.append(cancel_step)
+            
+            # Send the cancellation goal directly
+            self.action_client.send_goal_async(cancel_goal_msg)
+            
+            # Wait briefly for the cancellation to take effect
+            time.sleep(0.1)
+            
+            # Reset the cancellation flag
+            self.is_cancelling = False
+            
+            # Wait for previous movement to complete
             self.movement_complete.wait(timeout=0.2)
        
         # Mark that we're starting a movement
@@ -147,9 +169,11 @@ class KeyboardController(Node):
         step.angle = angle
         goal_msg.arg.steps.append(step)
        
-        self.get_logger().info(
-            f"Moving - Mode: {mode}, Speed: {speed:.2f}, Value: {value:.2f}"
-        )
+        # Only log for movement commands (not cancellations)
+        if action == self.ACTION_EXECUTE:
+            self.get_logger().info(
+                f"Moving - Mode: {mode}, Speed: {speed:.2f}, Value: {value:.2f}"
+            )
        
         # Send the goal
         send_goal_future = self.action_client.send_goal_async(
@@ -268,12 +292,11 @@ class KeyboardController(Node):
     def cancel_movement(self):
         """Cancel the current movement."""
         # Only send cancel command if we're actually moving
-        if self.is_moving:
-            return self.send_movement_command(
+        if self.is_moving and not self.is_cancelling:
+            self.send_movement_command(
                 self.MODE_STRAIGHT, 0.0, 0.0, action=self.ACTION_CANCEL
             )
-        return None
-    
+   
     def stop(self):
         """Stop the continuous movement thread and clean up."""
         self.running = False
