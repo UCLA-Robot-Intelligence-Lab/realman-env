@@ -1,0 +1,24 @@
+On very first install/boot of robot, fresh out of box. Must first run the installer for the woosh action server under ros2_ws/src/rmc_aida_l_ros2-develop/ros2_agv_robot/lib/ros-foxy-woosh-robot-agent_0.0.1-0focal_arm64.run.
+
+Change to this directory and do:
+sudo ./ros-foxy-woosh-robot-agent_0.0.1-0focal_arm64.run
+
+Then restart for changes to take effect.
+
+First run to start the action server:
+ros2 run woosh_robot_agent agent --ros-args -r __ns:=/woosh_robot -p ip:="169.254.128.2"
+- default ip is the 169 one. This will only work if you ahve installed the action server (*.run file) and restarted already.
+
+Then:
+cd ~/ros2_ws/
+colcon build --packages-select python_controller
+source install/setup.bash
+
+To build the package python_controller with the given nodes inside:
+- keyboard_base_controller (control base movement with keyboard input)
+- base_controller (example script to just go fowards some small distance)
+
+Now can run with:
+ros2 run python_controller keyboard_base_controller
+
+To run the keyboard_base_controller node inside of the python_controller package.
