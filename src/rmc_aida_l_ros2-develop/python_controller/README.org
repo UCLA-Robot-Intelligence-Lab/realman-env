@@ -1,26 +1,42 @@
-On very first install/boot of robot, fresh out of box. Must first run the installer for the woosh action server under ros2_ws/src/rmc_aida_l_ros2-develop/ros2_agv_robot/lib/ros-foxy-woosh-robot-agent_0.0.1-0focal_arm64.run.
+* Python Interface for Realman Robot 
+** Initial Setup
+On very first install/boot of robot, fresh out of box. Must first run the installer for the woosh (base) action server under: 
+#+begin_src bash
+ros2_ws/src/rmc_aida_l_ros2-develop/ros2_agv_robot/lib/ros-foxy-woosh-robot-agent_0.0.1-0focal_arm64.run
+#+end_src
 
-Change to this directory and do:
+Install via:
+#+begin_src bash
+cd ros2_ws/src/rmc_aida_l_ros2-develop/ros2_agv_robot/lib/
 sudo ./ros-foxy-woosh-robot-agent_0.0.1-0focal_arm64.run
+#+end_src
 
 Then restart for changes to take effect.
 
-First run to start the action server:
-ros2 run woosh_robot_agent agent --ros-args -r __ns:=/woosh_robot -p ip:="169.254.128.2"
-- default ip is the 169 one. This will only work if you ahve installed the action server (*.run file) and restarted already.
-
-Then:
+** Building the =python_controller= Package
+#+begin_src bash
 cd ~/ros2_ws/
 colcon build --packages-select python_controller
 source install/setup.bash
+#+end_src
 
-Remember to source the setup.bash in any new terminal you make!
+Remember to source the =install/setup.bash= in any new terminal you make!
 
-To build the package python_controller with the given nodes inside:
-- keyboard_base_controller (control base movement with keyboard input)
-- base_controller (example script to just go fowards some small distance)
+*** Avaliable Nodes
+keyboard_base_controller
+- control base movement with keyboard input 
 
-Now can run with:
+base_controller 
+- example script to just go fowards some small distance
+
+** Using the Base
+Before doing anything, you must start the action server:
+#+begin_src bash
+ros2 run woosh_robot_agent agent --ros-args -r __ns:=/woosh_robot -p ip:="169.254.128.2"
+#+end_src
+The default ip is the =169.254.128.2= 
+
+Can run and control the base using:
+#+begin_src bash
 ros2 run python_controller keyboard_base_controller
-
-To run the keyboard_base_controller node inside of the python_controller package.
+#+end_src
