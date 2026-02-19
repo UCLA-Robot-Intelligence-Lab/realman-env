@@ -1,0 +1,17 @@
+{
+  "frame_id": 2,
+  "camera_id": 0,
+  "serial_number": "027322070274",
+  "timestamp": "2026-02-06T15:34:51.954440",
+  "color_shape": [
+    480,
+    640,
+    3
+  ],
+  "depth_shape": [
+    480,
+    640
+  ],
+  "color_file": "camera_data/camera_0_color_000002.png",
+  "depth_file": "camera_data/camera_0_depth_000002.png"
+}
