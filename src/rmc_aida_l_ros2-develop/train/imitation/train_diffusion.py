@@ -1,5 +1,6 @@
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+
 import torch
 
 from lerobot.configs.types import FeatureType
@@ -10,15 +11,14 @@ from lerobot.policies.diffusion.configuration_diffusion import DiffusionConfig
 from lerobot.policies.diffusion.modeling_diffusion import DiffusionPolicy
 from lerobot.policies.factory import make_pre_post_processors
 
-REPO_ID = "repo_id_here"
-TRAINING_STEPS = 100000
-CHECKPOINT_FREQ = 10000
+REPO_ID         = "repo_id_here"
+TRAINING_STEPS  = 100_000
+CHECKPOINT_FREQ = 10_000
+BATCH_SIZE      = 16
+LR              = 1e-4
 
 
 def main():
-    # -------------------------------------------------
-    # Run directory with timestamp
-    # -------------------------------------------------
     run_name = datetime.now().strftime("run_%Y%m%d_%H%M%S")
     run_dir = Path("models") / run_name
     checkpoints_dir = run_dir / "checkpoints"
@@ -42,15 +42,8 @@ def main():
     output_features = {k: ft for k, ft in features.items() if ft.type is FeatureType.ACTION}
     input_features = {k: ft for k, ft in features.items() if k not in output_features}
 
-    # --- choose cameras to keep (adjust as needed)
-    cameras_to_keep = {
-        "observation.images.top_camera",
-        "observation.images.right_camera",
-        "observation.images.front_camera",
-        "observation.images.front_camera_depth",
-        "observation.state",
-    }
-    input_features = {k: ft for k, ft in input_features.items() if k in cameras_to_keep}
+    # keep all observation features (state + all cameras recorded in the dataset)
+    # to restrict cameras, filter input_features by key prefix here
 
     # --- configure diffusion policy
     cfg = DiffusionConfig(
@@ -85,12 +78,11 @@ def main():
     # tolerance_s controls allowed timestamp tolerance; adjust shuffle_buffer_size if desired
     dataset = StreamingLeRobotDataset(REPO_ID, delta_timestamps=delta_timestamps, tolerance_s=1e-3)
 
-    # --- optimizer / dataloader tuned for streaming
-    optimizer = torch.optim.Adam(policy.parameters(), lr=1e-4)
+    optimizer = torch.optim.Adam(policy.parameters(), lr=LR)
     dataloader = torch.utils.data.DataLoader(
         dataset,
-        num_workers=8,                # increase for IO parallelism; tune for your machine
-        batch_size=16,
+        num_workers=8,
+        batch_size=BATCH_SIZE,
         pin_memory=device.type != "cpu",
         drop_last=True,
         prefetch_factor=2,            # batches to prefetch per worker

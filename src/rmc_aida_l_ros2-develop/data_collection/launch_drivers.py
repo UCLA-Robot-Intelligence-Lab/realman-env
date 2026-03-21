@@ -1,20 +1,76 @@
+#!/usr/bin/env python3
+"""
+Launch ROS2 arm drivers and RealSense cameras.
+
+Run this with system Python 3.8 (has ROS2):
+    python3.8 launch_drivers.py
+
+Then run collect.py / deploy.py with conda environment (has LeRobot/PyTorch).
+"""
+
 import os
-from ament_index_python.packages import get_package_share_directory as get_pkg
-from launch import LaunchDescription, LaunchService
-from launch.actions import IncludeLaunchDescription as Include
-from launch.launch_description_sources import PythonLaunchDescriptionSource as Source
+import signal
+import subprocess
+import sys
 
-def generate():
-    rs_path = os.path.join(get_pkg('realsense2_camera'), 'launch', 'rs_launch.py')
-    arm_path = os.path.join(get_pkg('rm_driver'), 'launch', 'dual_rm_65_driver.launch.py')
-    
-    return LaunchDescription([
-        Include(Source(arm_path)),
-        *[Include(Source(rs_path), launch_arguments={'camera_name': f'camera{i}'}.items()) for i in range(1, 4)]
-    ])
+ROS_WS   = os.path.expanduser("~/ros2_ws/install/setup.bash")
 
-if __name__ == '__main__':
-    print("Launching Arms & 3 Cameras...")
-    ls = LaunchService()
-    ls.include_launch_description(generate())
-    ls.run()
+# ── Config ───────────────────────────────────────────────────────
+ARM_MODEL = "rm65"   # "rm65" or "rm75"
+ARM_ONLY  = False    # True = skip cameras
+# ─────────────────────────────────────────────────────────────────
+
+
+def run(cmd: list, env=None) -> subprocess.Popen:
+    return subprocess.Popen(cmd, env=env)
+
+
+def source_ros():
+    """Return env dict with ROS2 sourced (reads from shell)."""
+    import shlex
+    result = subprocess.run(
+        f"bash -c 'source /opt/ros/foxy/setup.bash && source {ROS_WS} 2>/dev/null; env'",
+        shell=True, capture_output=True, text=True
+    )
+    env = {}
+    for line in result.stdout.splitlines():
+        if "=" in line:
+            k, _, v = line.partition("=")
+            env[k] = v
+    return env
+
+
+def main():
+    ros_env = source_ros()
+    procs = []
+
+    driver_launch = f"dual_{ARM_MODEL}_driver.launch.py"
+    print(f"Launching arm driver: {driver_launch}")
+    procs.append(run(["ros2", "launch", "rm_driver", driver_launch], env=ros_env))
+
+    if not ARM_ONLY:
+        print("Launching cameras (3x RealSense)...")
+        for i in range(3):
+            procs.append(run(
+                ["ros2", "launch", "realsense2_camera", "rs_launch.py",
+                 f"camera_name:=camera{i}"],
+                env=ros_env
+            ))
+
+    print(f"Drivers running ({len(procs)} processes). Ctrl+C to stop.\n")
+
+    def shutdown(sig, _):
+        print("Stopping drivers...")
+        for p in procs:
+            p.terminate()
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, shutdown)
+    signal.signal(signal.SIGTERM, shutdown)
+
+    for p in procs:
+        p.wait()
+
+
+if __name__ == "__main__":
+    main()
