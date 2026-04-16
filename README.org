@@ -1,2 +1,0 @@
-* Realman Robot Environment
-Realman environment --> ROS2 Foxy Python --> ROS2 Foxy C++
